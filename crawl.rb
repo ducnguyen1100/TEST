@@ -11,8 +11,9 @@ require 'redis'
 
 client = Mysql2::Client.new(:host => @db_host, :username => @db_user, :password => @db_pass, :database => @db_name)
 redis = Redis.new(host: "localhost")
+#2ういあえおかきくけこさしすせたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをんがぎぐげござじずぜぞだぢづでどばびぶべぼぱぴぷぺぽアイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン
 Redis.exists_returns_integer = false
-alphabet = '2そういあえおかきくけこさしすせたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをんがぎぐげござじずぜぞだぢづでどばびぶべぼぱぴぷぺぽアイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン'
+alphabet = 'そ'
 wait = Selenium::WebDriver::Wait.new(:timeout => 10)
 while(true)
     redis.flushall
@@ -78,9 +79,9 @@ while(true)
                                 feature = client.query("SELECT * FROM hojokin.features  where  package_id = '#{subsidy_id}' order by id")
                                 if feature.count == 0
                                     p 'add more'
-                                    client.query("delete from features_waiting where package_id = '#{subsidy_id}'")
+                                    client.query("delete from waiting_features where package_id = '#{subsidy_id}'")
                                     check_list.each_with_index do |item,index|
-                                        client.query("insert into features_waiting(name,package_id) values ('#{check_list[index].text}','#{subsidy_id}')")
+                                        client.query("insert into waiting_features(name,package_id) values ('#{check_list[index].text}','#{subsidy_id}')")
                                     end  
                                 else
                                     isModified = 0
@@ -96,9 +97,9 @@ while(true)
                                     
                                     if isModified == 1
                                         p "modified #{subsidy_id}"
-                                        client.query("delete from features_waiting where package_id = '#{subsidy_id}'")
+                                        client.query("delete from waiting_features where package_id = '#{subsidy_id}'")
                                         check_list.each_with_index do |item,index|
-                                            client.query("insert into features_waiting(name,package_id) values ('#{check_list[index].text}','#{subsidy_id}')")
+                                            client.query("insert into waiting_features(name,package_id) values ('#{check_list[index].text}','#{subsidy_id}')")
                                         end  
                                     end 
                                 end
@@ -147,33 +148,33 @@ while(true)
 
                 if package_db.count == 0
                     p "#{package} not insert"
-                    client.query("delete from packages_waiting where id = '#{package}'")
-                    client.query("insert into packages_waiting(id,title,content1,content2,content3,content4,extra_link,status,description) values ('#{package}','#{title}','#{content1}','#{content2}','#{content3}','#{content4}','#{extra_link}',0,'#{des}')")
+                    client.query("delete from waiting_packages where id = '#{package}'")
+                    client.query("insert into waiting_packages(id,title,content1,content2,content3,content4,extra_link,status,description) values ('#{package}','#{title}','#{content1}','#{content2}','#{content3}','#{content4}','#{extra_link}',0,'#{des}')")
                 end
 
                 if package_db.count == 1
                     is_update = 0
-                    features_waiting = client.query("SELECT * FROM hojokin.features_waiting  where  package_id = '#{package}'")
+                   waiting_features = client.query("SELECT * FROM hojokin.waiting_features  where  package_id = '#{package}'")
                     package_db.each do |row|
                         if row['content1'] != content1 || row['content2'] != content2 || row['content3'] != content3 ||row['content4'] != content4 || row['title']!=title || row['extra_link'] != extra_link
                             p "update #{package}"
                             is_update = 1
                         end
                     end
-                    if(features_waiting.count > 0 )
+                    if(waiting_features.count > 0 )
                         p "update checklist and update '#{package}'"
-                        client.query("delete from packages_waiting where id = '#{package}'")
-                        client.query("insert into packages_waiting(id,title,content1,content2,content3,content4,extra_link,status,description) values ('#{package}','#{title}','#{content1}','#{content2}','#{content3}','#{content4}','#{extra_link}',1,'#{des}')")
+                        client.query("delete from waiting_packages where id = '#{package}'")
+                        client.query("insert into waiting_packages(id,title,content1,content2,content3,content4,extra_link,status,description) values ('#{package}','#{title}','#{content1}','#{content2}','#{content3}','#{content4}','#{extra_link}',1,'#{des}')")
                     else 
                         if is_update == 1
                             p "update #{package} not update checklist"
-                            client.query("delete from features_waiting where package_id = '#{package}'")
+                            client.query("delete from waiting_features where package_id = '#{package}'")
                             check_list_db = client.query("select * from features where package_id = '#{package}'")
                             check_list_db.each do |row|
-                                client.query("insert into features_waiting(name,package_id) values ('#{row['name']}','#{row['package_id']}')")
+                                client.query("insert into waiting_features(name,package_id) values ('#{row['name']}','#{row['package_id']}')")
                             end
-                            client.query("delete from packages_waiting where id = '#{package}'")
-                            client.query("insert into packages_waiting(id,title,content1,content2,content3,content4,extra_link,status,description) values ('#{package}','#{title}','#{content1}','#{content2}','#{content3}','#{content4}','#{extra_link}',1,'#{des}')")
+                            client.query("delete from waiting_packages where id = '#{package}'")
+                            client.query("insert into waiting_packages(id,title,content1,content2,content3,content4,extra_link,status,description) values ('#{package}','#{title}','#{content1}','#{content2}','#{content3}','#{content4}','#{extra_link}',1,'#{des}')")
                         end
                     end   
                 end
