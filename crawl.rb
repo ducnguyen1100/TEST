@@ -177,7 +177,7 @@ while(true)
                         end
                     end   
                 end
-                if index%2000==0
+                if index%300==0
                     driver.quit()
                     driver = Selenium::WebDriver.for:firefox
                 end
