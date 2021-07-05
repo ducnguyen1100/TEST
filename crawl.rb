@@ -8,22 +8,40 @@ require 'redis'
 @db_user  = "root"
 @db_pass  = "root"
 @db_name = "hojokin"
-
 client = Mysql2::Client.new(:host => @db_host, :username => @db_user, :password => @db_pass, :database => @db_name)
 redis = Redis.new(host: "localhost")
 #2ういあえおかきくけこさしすせたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをんがぎぐげござじずぜぞだぢづでどばびぶべぼぱぴぷぺぽアイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン
 Redis.exists_returns_integer = false
 CRAWL_CHECKLIST = 'CRAWL_CHECKLIST'
 CRAWL_DETAILS = 'CRAWL_DETAILS'
-alphabet = 'う'
+alphabet = '2'
 wait = Selenium::WebDriver::Wait.new(:timeout => 10)
 options = Selenium::WebDriver::Firefox::Options.new(args: ['--headless'])
 crawl_times = 0;
+def getSubsidyId (str)
+    subsidy_id = ''
+    flag = false
+    str.each_char do |char|
+        if flag == true
+            if(char == "'")
+                break
+            else
+                subsidy_id+=char
+            end
+        else
+            if(char == "'")
+                flag = true
+            end
+        end
+    end
+    return subsidy_id
+end
+# byebug
 while(true)
     # redis.flushall
-    # crawl_times+=1
+    crawl_times+=1
     begin
-        driver = Selenium::WebDriver.for:firefox
+        # driver = Selenium::WebDriver.for:firefox
         # driver.get "https://www.squet.ne.jp/mufg/s/login/"
         # element = driver.find_element(:xpath,'//*[@id="str_header"]/div/div/div/div/div/form/p[1]/label/input')
         # element.send_keys "s180851473-2"
@@ -72,7 +90,7 @@ while(true)
         #             packages_amount+=list.length
         #             list.each_with_index do |list_item,index|
         #                 link = list_item.children.css('a').first['href']
-        #                 subsidy_id = link[23..40]
+        #                 subsidy_id = getSubsidyId(link)
         #                 if redis.exists(subsidy_id)==false
         #                     redis.set(subsidy_id,1)
         #                     begin
@@ -161,7 +179,7 @@ while(true)
         # end
 
         # driver.quit()
-        # driver = Selenium::WebDriver.for:firefox
+        driver = Selenium::WebDriver.for:firefox
 
         package_ids = redis.keys('subsidy*')
         index = 0;
@@ -186,61 +204,55 @@ while(true)
                     end
                     titleBeforeContent+=char
                 end
+                isCrawl = true
                 prefectures.each do |row|
                     matchState =  titleBeforeContent.match /.*#{row['name']}/
                     if matchState
+                        if titleBeforeContent.include?("市") || titleBeforeContent.include?("町") || titleBeforeContent.include?("村") || titleBeforeContent.include?("区")
+                            isCrawl = false
+                        end
                         matchDetails = titleCrawl.match /「.*」/
                         title += matchState[0] + matchDetails[0];
-                        break;
-                    end
+                    end             
                 end
-
                 if(title.length == 0 || titleBeforeContent.length == titleCrawl.length)
                     title = titleCrawl
                 end
 
-                package_db = client.query("select * from packages where id = '#{package}'")
-                if package_db.count == 0
-                    p "#{package} not insert"
+                if isCrawl == false
+                    p "not get this packages #{titleCrawl}"
                     client.query("delete from waiting_packages where id = '#{package}'")
-                    client.query("insert into waiting_packages(id,title,content1,content2,content3,content4,extra_link,status,description) values ('#{package}','#{title}','#{content1}','#{content2}','#{content3}','#{content4}','#{extra_link}',0,'#{des}')")
-
-                    jobs_history = client.query("select * from jobs_history where package_id = '#{package}' and crawl_type = '#{CRAWL_DETAILS}'")
-                    if jobs_history.count == 0
-                        client.query("insert into jobs_history(package_id,crawl_type,action,success,exception,crawl_times,created_at,updated_at) values('#{package}','#{CRAWL_DETAILS}','create',1,null,#{crawl_times},'#{Time.now.strftime("%Y-%m-%d %H:%M:%S")}','#{Time.now.strftime("%Y-%m-%d %H:%M:%S")}')")
-                    else
-                        client.query("update jobs_history set action = 'create', exception = null, success = 1, crawl_times = '#{crawl_times}', updated_at = '#{Time.now.strftime("%Y-%m-%d %H:%M:%S")}' where  package_id = '#{package}' and crawl_type = '#{CRAWL_DETAILS}'")
-                    end   
-                end
-
-                if package_db.count == 1
-                    is_update = 0
-                   waiting_features = client.query("SELECT * FROM hojokin.waiting_features  where  package_id = '#{package}'")
-                    package_db.each do |row|
-                        if row['content1'] != content1 || row['content2'] != content2 || row['content3'] != content3 ||row['content4'] != content4 || row['title']!=title || row['extra_link'] != extra_link
-                            p "update #{package}"
-                            is_update = 1
-                        end
-                    end
-                    if(waiting_features.count > 0 )
-                        p "update checklist and update '#{package}'"
+                    client.query("delete from waiting_features where package_id = '#{package}'")
+                    client.query("delete from jobs_history where package_id = '#{package}' and crawl_type = '#{CRAWL_CHECKLIST}'")
+                else
+                    is_add_combinations = 0;
+                    package_db = client.query("select * from packages where id = '#{package}' and deleted_at is  NULL ")
+                    if package_db.count == 0
+                        is_add_combinations = 1;
+                        p "#{package} not insert"
                         client.query("delete from waiting_packages where id = '#{package}'")
-                        client.query("insert into waiting_packages(id,title,content1,content2,content3,content4,extra_link,status,description) values ('#{package}','#{title}','#{content1}','#{content2}','#{content3}','#{content4}','#{extra_link}',1,'#{des}')")
+                        client.query("insert into waiting_packages(id,title,content1,content2,content3,content4,extra_link,status,description) values ('#{package}','#{title}','#{content1}','#{content2}','#{content3}','#{content4}','#{extra_link}',0,'#{des}')")
 
                         jobs_history = client.query("select * from jobs_history where package_id = '#{package}' and crawl_type = '#{CRAWL_DETAILS}'")
                         if jobs_history.count == 0
-                            client.query("insert into jobs_history(package_id,crawl_type,action,success,exception,crawl_times,created_at,updated_at) values('#{package}','#{CRAWL_DETAILS}','update',1,null,#{crawl_times},'#{Time.now.strftime("%Y-%m-%d %H:%M:%S")}','#{Time.now.strftime("%Y-%m-%d %H:%M:%S")}')")
+                            client.query("insert into jobs_history(package_id,crawl_type,action,success,exception,crawl_times,created_at,updated_at) values('#{package}','#{CRAWL_DETAILS}','create',1,null,#{crawl_times},'#{Time.now.strftime("%Y-%m-%d %H:%M:%S")}','#{Time.now.strftime("%Y-%m-%d %H:%M:%S")}')")
                         else
-                            client.query("update jobs_history set action = 'update', exception = null, success = 1, crawl_times = '#{crawl_times}', updated_at = '#{Time.now.strftime("%Y-%m-%d %H:%M:%S")}' where  package_id = '#{package}' and crawl_type = '#{CRAWL_DETAILS}'")
+                            client.query("update jobs_history set action = 'create', exception = null, success = 1, crawl_times = '#{crawl_times}', updated_at = '#{Time.now.strftime("%Y-%m-%d %H:%M:%S")}' where  package_id = '#{package}' and crawl_type = '#{CRAWL_DETAILS}'")
                         end   
-                    else 
-                        if is_update == 1
-                            p "update #{package} not update checklist"
-                            client.query("delete from waiting_features where package_id = '#{package}'")
-                            check_list_db = client.query("select * from features where package_id = '#{package}'")
-                            check_list_db.each do |row|
-                                client.query("insert into waiting_features(name,package_id) values ('#{row['name']}','#{row['package_id']}')")
+                    end
+
+                    if package_db.count == 1
+                        is_update = 0
+                        waiting_features = client.query("SELECT * FROM hojokin.waiting_features  where  package_id = '#{package}'")
+                        package_db.each do |row|
+                            if row['content1'] != content1 || row['content2'] != content2 || row['content3'] != content3 ||row['content4'] != content4 || row['title']!=title || row['extra_link'] != extra_link
+                                p "update #{package}"
+                                is_update = 1
                             end
+                        end
+                        if(waiting_features.count > 0 )
+                            is_add_combinations = 1;
+                            p "update checklist and update '#{package}'"
                             client.query("delete from waiting_packages where id = '#{package}'")
                             client.query("insert into waiting_packages(id,title,content1,content2,content3,content4,extra_link,status,description) values ('#{package}','#{title}','#{content1}','#{content2}','#{content3}','#{content4}','#{extra_link}',1,'#{des}')")
 
@@ -250,8 +262,27 @@ while(true)
                             else
                                 client.query("update jobs_history set action = 'update', exception = null, success = 1, crawl_times = '#{crawl_times}', updated_at = '#{Time.now.strftime("%Y-%m-%d %H:%M:%S")}' where  package_id = '#{package}' and crawl_type = '#{CRAWL_DETAILS}'")
                             end   
-                        end
-                    end   
+                        else 
+                            if is_update == 1
+                                is_add_combinations = 1;
+                                p "update #{package} not update checklist"
+                                client.query("delete from waiting_features where package_id = '#{package}'")
+                                check_list_db = client.query("select * from features where package_id = '#{package}'")
+                                check_list_db.each do |row|
+                                    client.query("insert into waiting_features(name,package_id) values ('#{row['name']}','#{row['package_id']}')")
+                                end
+                                client.query("delete from waiting_packages where id = '#{package}'")
+                                client.query("insert into waiting_packages(id,title,content1,content2,content3,content4,extra_link,status,description) values ('#{package}','#{title}','#{content1}','#{content2}','#{content3}','#{content4}','#{extra_link}',1,'#{des}')")
+
+                                jobs_history = client.query("select * from jobs_history where package_id = '#{package}' and crawl_type = '#{CRAWL_DETAILS}'")
+                                if jobs_history.count == 0
+                                    client.query("insert into jobs_history(package_id,crawl_type,action,success,exception,crawl_times,created_at,updated_at) values('#{package}','#{CRAWL_DETAILS}','update',1,null,#{crawl_times},'#{Time.now.strftime("%Y-%m-%d %H:%M:%S")}','#{Time.now.strftime("%Y-%m-%d %H:%M:%S")}')")
+                                else
+                                    client.query("update jobs_history set action = 'update', exception = null, success = 1, crawl_times = '#{crawl_times}', updated_at = '#{Time.now.strftime("%Y-%m-%d %H:%M:%S")}' where  package_id = '#{package}' and crawl_type = '#{CRAWL_DETAILS}'")
+                                end   
+                            end
+                        end   
+                    end
                 end
                 if index%300==0
                     driver.quit()
